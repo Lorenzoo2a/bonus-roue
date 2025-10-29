@@ -56,9 +56,6 @@
     a.cta.show{ display:grid; animation:pulse 1.4s ease-in-out infinite; }
     a.cta.sheen::after{ content:""; position:absolute; inset:-40% -20%; background: radial-gradient(closest-side, rgba(255,255,255,.35), rgba(255,255,255,0) 60%); transform: translateX(-120%) rotate(15deg); animation: sheen 3s linear infinite; }
 
-    .logos{ display:flex; justify-content:center; align-items:center; gap:12px; flex-wrap:wrap; margin-top:10px; margin-bottom:8px; }
-    .logos img{ height:36px; max-width:180px; object-fit:contain; filter: brightness(0) invert(1) drop-shadow(0 1px 0 rgba(0,0,0,.2)); opacity:.96; }
-
     .result{ margin:14px auto 0; width: clamp(220px, 90vw, 520px); background: linear-gradient(180deg, #101a24, #0e1821); border-radius:18px; padding:22px 18px; border: 1px solid rgba(46,161,255,.20); box-shadow: 0 12px 40px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.04); text-align:center; position:relative; overflow:hidden; display:none; box-sizing:border-box; }
     .result.show{ display:block; }
     .result .kicker{ font-weight:900; letter-spacing:.22em; font-size:13px; color:#eaf2ff; opacity:.9; text-transform:uppercase; }
@@ -91,7 +88,7 @@
       <div class="sub">Tourne la roue et <b>tente de décrocher un bonus exclusif</b>.</div>
     </header>
 
-    <a id="claimBtn" class="cta" href="https://partners.shinywildpartners.com/v2/text/80/6/0598cf87-b3b9-11ef-93fc-cad21936ea85/5" target="_blank" rel="nofollow noopener noreferrer" aria-label="Récupérer le bonus">RÉCUPÈRE TON BONUS</a>
+    <a id="claimBtn" class="cta" href="http://stake.ac/?c=83nbNhy9" target="_blank" rel="nofollow noopener noreferrer" aria-label="Récupérer le bonus">RÉCUPÈRE TON BONUS</a>
 
     <section class="wheel-wrap" aria-label="Roulette des gains">
       <canvas id="wheel" aria-hidden="true"></canvas>
@@ -130,16 +127,16 @@
 
     // Segments (7 au total)
     const segments = [
-      { label: "Premier dépôt TRIPLÉ !", color: "#FFD54A" },
+      { label: "Premier dépôt TRIPLÉ !", color: "#FFD54A" },
       { label: "Perdu ❌",               color: "#293248" },
-      { label: "100€ Cash", color: "#2EA1FF" },
+      { label: "100€ Cash",              color: "#2EA1FF" },
       { label: "Perdu ❌",               color: "#293248" },
       { label: "Perdu ❌",               color: "#293248" },
       { label: "Perdu ❌",               color: "#293248" },
       { label: "Perdu ❌",               color: "#293248" }
     ];
 
-    // Winner detection regex (EN)
+    // Winner detection regex (FR)
     const WIN_REGEX = /TRIPL[ÉE]/i;
 
     // Geometry
@@ -149,6 +146,34 @@
     let rotation = 0; // radians
     const TWO_PI = Math.PI * 2;
     const ARC = TWO_PI / segments.length;
+
+    // --- Persistence: garder le résultat après refresh
+    const STORAGE_KEY = 'wheel_state_v1';
+    function alignToWin(){
+      const base = targetIndex * ARC + ARC/2; // centre du segment gagnant
+      rotation = -base;                       // aligne le gagnant sous le pointeur
+    }
+    function saveState(){
+      try{ localStorage.setItem(STORAGE_KEY, JSON.stringify({ spun:true, ts:Date.now() })); }catch(e){}
+    }
+    function restoreState(){
+      try{
+        const s = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+        if(s && s.spun){
+          locked = true;
+          prizeFocus = true;
+          alignToWin();
+          drawWheel();
+          showResult();
+          if (claimBtn) claimBtn.classList.add('show','sheen');
+          if (spinBtn)  spinBtn.remove();
+          return true;
+        }
+      }catch(e){}
+      return false;
+    }
+    // (Optionnel) reset rapide via hash #reset
+    if (/#reset/.test(location.hash)) { try{ localStorage.removeItem(STORAGE_KEY); }catch(e){} }
 
     // Focus & sheen
     let prizeFocus = false;           // dim des autres segments après le spin
@@ -561,6 +586,7 @@
       startHaloPulse();             // halo blanc pulsant sur segment gagnant
       startWinSheen();              // light sweep sur le segment gagnant
       try{ playCash(); }catch(e){}
+      saveState();                  // <- persistance
     }
 
     function showResult(){
@@ -576,7 +602,8 @@
     }
 
     // Setup initial
-    drawWheel();
+    const restored = restoreState();
+    if(!restored){ drawWheel(); }
     initDots();
     renderDots();
 
@@ -612,7 +639,7 @@
         }
         console.info('Winner segment alignment (approx):', ok1);
 
-        // Test 2: un seul tirage par session
+        // Test 2: un seul tirage par session => lock
         spinning = false; locked = false;
         spin();
         setTimeout(()=>{
@@ -629,25 +656,10 @@
         // Test 4: structure segments
         console[segments.length===7?'info':'error']('Segments count = 7:', segments.length);
         console[targetIndex!==-1?'info':'error']('Index TRIPLED segment:', targetIndex);
-        // Test 4.1: exclamation present in winner label
         try{ console[/!/.test(segments[0].label)?'info':'warn']('Exclamation present in winner label:', segments[0].label); }catch(e){}
-        // Test 4.2: easing in-out present
         console[typeof easeInOutCubic==='function'?'info':'error']('easeInOutCubic present:', typeof easeInOutCubic);
-        // Test 5: launchConfetti doit être une fonction et contenir le fade-out
         console[typeof launchConfetti==='function' ? 'info':'error']('launchConfetti is a function:', typeof launchConfetti);
         try{ console[/globalAlpha/.test(launchConfetti.toString()) ? 'info':'warn']('Confetti fade-out present (globalAlpha):', /globalAlpha/.test(launchConfetti.toString())); }catch(e){ console.warn('toString non dispo'); }
-        // Test 6: CTA plus étroite que la card résultat (écart 8–120px attendu)
-        try{
-          const resEl = document.getElementById('result');
-          const ctaEl = document.getElementById('claimBtn');
-          if (resEl && ctaEl){
-            const rw = parseInt(getComputedStyle(resEl).width);
-            const cw = parseInt(getComputedStyle(ctaEl).width);
-            const diff = rw - cw; // doit être > 0 car CTA moins large
-            console[(diff>=8 && diff<=120)? 'info':'warn']('CTA narrower than result card:', {rw, cw, diff});
-          }
-        }catch(e){ console.warn('CTA/Result width test not available'); }
-
       }catch(e){ console.error('Tests error:', e); }
       console.groupEnd();
     })();
